@@ -56,6 +56,7 @@ class APersonMaskGenerator:
                     "body_mask": false_widget,
                     "clothes_mask": false_widget,
                     "confidence": ("FLOAT", {"default": 0.40, "min": 0.01, "max": 1.0, "step": 0.01},),
+                    "is_face_detected_list":("LIST", )
                 }
         }
 
@@ -80,7 +81,7 @@ class APersonMaskGenerator:
 
         return mp.Image(image_format=image_format, data=numpy_image)
 
-    def generate_mask(self, images, face_mask: bool, background_mask: bool, hair_mask: bool, body_mask: bool, clothes_mask: bool, confidence: float):
+    def generate_mask(self, images, face_mask: bool, background_mask: bool, hair_mask: bool, body_mask: bool, clothes_mask: bool, confidence: float, is_face_detected_list: list):
 
         """Create a segmentation mask from an image
 
@@ -95,7 +96,9 @@ class APersonMaskGenerator:
         Returns:
             torch.Tensor: The segmentation masks.
         """
-
+        if not any(is_face_detected_list):
+            return (images[:, :, :, 0]*0, )
+            
         a_person_mask_generator_model_path = get_a_person_mask_generator_model_path()
         a_person_mask_generator_model_buffer = None
 
@@ -111,7 +114,11 @@ class APersonMaskGenerator:
         # Create the image segmenter
         res_masks = []
         with mp.tasks.vision.ImageSegmenter.create_from_options(options) as segmenter:
-            for image in images:
+            for img_i, image in enumerate(images):
+                if not is_face_detected_list[img_i]:
+                    res_masks.append(images[[img_i], :, :, [0]]*0)
+                    continue
+                    
                 # Convert the Tensor to a PIL image
                 i = 255. * image.cpu().numpy()
                 image_pil = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
